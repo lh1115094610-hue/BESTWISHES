@@ -21,7 +21,8 @@ const Scene: React.FC<SceneProps> = ({ treeState, handPos }) => {
   const lastMouseX = useRef(0);
   const isMouseDown = useRef(false);
   const friction = 0.96;
-  const progress = useRef(0);
+  // Initialize progress based on treeState to prevent jumping or unnecessary initial animation
+  const progress = useRef(treeState === TreeState.FORMED ? 1 : 0);
   const [speedIntensity, setSpeedIntensity] = useState(0);
 
   const { mouse } = useThree();

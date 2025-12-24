@@ -23,7 +23,7 @@ const Overlay: React.FC<OverlayProps> = ({
 
   return (
     <>
-      {/* 浮动控制按钮 - 始终可见或通过特定逻辑触发 */}
+      {/* 浮动控制按钮组 - 始终保持可见以供用户操作 */}
       <div className="absolute top-6 right-6 z-[60] flex gap-3 pointer-events-auto">
         <button
           onClick={onToggleInteraction}
@@ -41,8 +41,12 @@ const Overlay: React.FC<OverlayProps> = ({
 
         <button
           onClick={onToggleUi}
-          title={uiVisible ? "Hide UI" : "Show UI"}
-          className="p-3 bg-white/5 border border-white/20 rounded-full backdrop-blur-md text-white hover:bg-white/10 transition-all shadow-lg"
+          title={uiVisible ? "Hide Guides" : "Show Guides"}
+          className={`p-3 rounded-full backdrop-blur-md transition-all duration-300 shadow-lg border ${
+            uiVisible 
+              ? 'bg-white/10 border-white/30 text-white' 
+              : 'bg-amber-500/20 border-amber-500/50 text-amber-500'
+          }`}
         >
           {uiVisible ? (
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -57,10 +61,12 @@ const Overlay: React.FC<OverlayProps> = ({
         </button>
       </div>
 
-      {/* 主 UI 内容 */}
-      <div className={`absolute inset-0 pointer-events-none flex flex-col justify-between p-8 md:p-16 transition-all duration-700 ${uiVisible ? 'opacity-100' : 'opacity-0 translate-y-4'}`}>
+      {/* 主 UI 内容容器 - 始终保持交互 */}
+      <div className="absolute inset-0 pointer-events-none flex flex-col justify-between p-8 md:p-16">
+        
+        {/* 项目标题 - 始终显示，作为画面的一部分 */}
         <header className="flex flex-col items-start gap-2">
-          <h2 className="text-amber-400 text-xs tracking-[0.4em] uppercase font-semibold">
+          <h2 className="text-amber-400 text-xs tracking-[0.4em] uppercase font-semibold drop-shadow-md">
             AI-Powered Seasonal Masterpiece
           </h2>
           <h1 className="text-white text-4xl md:text-6xl font-black drop-shadow-2xl">
@@ -70,13 +76,14 @@ const Overlay: React.FC<OverlayProps> = ({
           </h1>
         </header>
 
+        {/* MERRY CHRISTMAS 祝愿语 - 逻辑保持：释放时惊喜出现 */}
         <div 
           className={`absolute inset-0 flex items-center justify-center transition-all duration-1000 ease-in-out px-4 text-center
             ${isReleased ? 'opacity-100 scale-100' : 'opacity-0 scale-90 translate-y-4'}`}
         >
           <div className="flex flex-col items-center">
             <div className="h-[1px] w-24 bg-amber-500/50 mb-6"></div>
-            <h2 className="text-amber-500 text-5xl md:text-8xl font-black tracking-[0.2em] uppercase drop-shadow-[0_0_30px_rgba(251,191,36,0.5)]">
+            <h2 className="text-amber-500 text-5xl md:text-8xl font-black tracking-[0.2em] uppercase drop-shadow-[0_0_40px_rgba(251,191,36,0.6)]">
               Merry
               <br />
               Christmas
@@ -88,8 +95,12 @@ const Overlay: React.FC<OverlayProps> = ({
           </div>
         </div>
 
+        {/* 底部 UI：左侧指引受 uiVisible 影响，右侧按钮始终保留 */}
         <footer className="flex flex-col md:flex-row justify-between items-end gap-8">
-          <div className="max-w-xs text-amber-100/60 text-sm leading-relaxed">
+          
+          {/* 操作指引文本 - 关键更新：仅在此处应用 uiVisible 的隐藏/过渡逻辑 */}
+          <div className={`max-w-xs text-amber-100/60 text-sm leading-relaxed transition-all duration-700
+            ${uiVisible ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-12'}`}>
             <div className="space-y-3 mb-4">
               <p className={`transition-opacity ${interactionEnabled ? 'opacity-100' : 'opacity-30'}`}>
                 <span className="text-red-500 font-bold uppercase text-[10px] bg-red-500/10 px-2 py-0.5 rounded border border-red-500/20">Fist</span>
@@ -104,18 +115,14 @@ const Overlay: React.FC<OverlayProps> = ({
                 <span className="ml-2">Spin with hyper-intensity</span>
               </p>
             </div>
-            {!interactionEnabled && (
-              <div className="text-amber-500/60 text-[10px] font-bold uppercase tracking-widest mb-4">
-                Gesture Control: [OFF]
-              </div>
-            )}
             <div className="h-[1px] w-12 bg-amber-500/30 mb-4"></div>
             <p className="italic">The universe reacts to your motion.</p>
           </div>
 
+          {/* 主交互按钮 - 始终保持可见，它是核心体验的一部分 */}
           <button
             onClick={onToggle}
-            className={`pointer-events-auto group relative overflow-hidden bg-gradient-to-br from-amber-600 to-amber-400 px-10 py-5 rounded-full shadow-[0_10px_40px_-10px_rgba(251,191,36,0.4)] transition-all hover:scale-105 active:scale-95 ${!uiVisible ? 'pointer-events-none' : ''}`}
+            className="pointer-events-auto group relative overflow-hidden bg-gradient-to-br from-amber-600 to-amber-400 px-10 py-5 rounded-full shadow-[0_10px_40px_-10px_rgba(251,191,36,0.4)] transition-all hover:scale-105 active:scale-95"
           >
             <span className="relative z-10 text-white font-black tracking-widest text-lg uppercase flex items-center gap-3">
               {isReleased ? 'Summon' : 'Release'}

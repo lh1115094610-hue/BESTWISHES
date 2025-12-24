@@ -1,4 +1,3 @@
-
 import React, { Suspense, useState, useCallback, useRef, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Environment, OrbitControls, ContactShadows, PerspectiveCamera } from '@react-three/drei';
@@ -8,12 +7,13 @@ import Scene from './components/Scene';
 import Overlay from './components/Overlay';
 
 const App: React.FC = () => {
-  const [treeState, setTreeState] = useState<TreeState>(TreeState.CHAOS);
+  const [treeState, setTreeState] = useState<TreeState>(TreeState.FORMED);
   const [handPos, setHandPos] = useState({ x: 0, y: 0, active: false, isFist: false });
   const [interactionEnabled, setInteractionEnabled] = useState(true);
   const [uiVisible, setUiVisible] = useState(true);
   const [isReady, setIsReady] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [isCameraStarting, setIsCameraStarting] = useState(false);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const treeStateRef = useRef<TreeState>(treeState);
@@ -46,24 +46,36 @@ const App: React.FC = () => {
     let handsInstance: any = null;
     let stream: MediaStream | null = null;
 
-    const initMediaPipe = async () => {
-      // 检查运行环境
-      if (!window.isSecureContext) {
-        setCameraError("Insecure Context (Requires HTTPS)");
+    const startInteraction = async () => {
+      if (!interactionEnabled) {
         setIsReady(true);
         return;
       }
 
-      // @ts-ignore
-      if (!window.Hands) {
-        if (isMounted) setTimeout(initMediaPipe, 500);
+      setIsCameraStarting(true);
+      setCameraError(null);
+
+      // 检查运行环境
+      if (!window.isSecureContext) {
+        setCameraError("Insecure Context");
+        setIsReady(true);
+        setIsCameraStarting(false);
         return;
       }
 
+      // 等待 MediaPipe 库加载
+      // Fix: Access Hands through (window as any) to resolve TypeScript property error
+      if (!(window as any).Hands) {
+        let attempts = 0;
+        while (!(window as any).Hands && attempts < 20) {
+          await new Promise(r => setTimeout(r, 200));
+          attempts++;
+        }
+      }
+
       try {
-        // 1. 初始化 Hands
-        // @ts-ignore
-        handsInstance = new window.Hands({
+        // Fix: Use (window as any).Hands to instantiate the MediaPipe Hands class
+        handsInstance = new (window as any).Hands({
           locateFile: (file: string) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${file}`,
         });
 
@@ -75,7 +87,7 @@ const App: React.FC = () => {
         });
 
         handsInstance.onResults((results: any) => {
-          if (!isMounted) return;
+          if (!isMounted || !interactionEnabledRef.current) return;
           if (results && results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
             const landmarks = results.multiHandLandmarks[0];
             const x = (landmarks[8].x - 0.5) * 2;
@@ -93,16 +105,14 @@ const App: React.FC = () => {
 
             setHandPos({ x, y, active: true, isFist });
 
-            if (interactionEnabledRef.current) {
-              const now = Date.now();
-              if (now - lastStateChange.current > 1000) { 
-                if (isFist && treeStateRef.current === TreeState.CHAOS) {
-                  setTreeState(TreeState.FORMED);
-                  lastStateChange.current = now;
-                } else if (isOpen && treeStateRef.current === TreeState.FORMED) {
-                  setTreeState(TreeState.CHAOS);
-                  lastStateChange.current = now;
-                }
+            const now = Date.now();
+            if (now - lastStateChange.current > 1000) { 
+              if (isFist && treeStateRef.current === TreeState.CHAOS) {
+                setTreeState(TreeState.FORMED);
+                lastStateChange.current = now;
+              } else if (isOpen && treeStateRef.current === TreeState.FORMED) {
+                setTreeState(TreeState.CHAOS);
+                lastStateChange.current = now;
               }
             }
           } else {
@@ -110,50 +120,63 @@ const App: React.FC = () => {
           }
         });
 
-        // 2. 使用原生方式开启摄像头
-        try {
-          stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { width: 640, height: 480, facingMode: 'user' } 
-          });
-          
-          if (videoRef.current) {
-            videoRef.current.srcObject = stream;
-            videoRef.current.onloadedmetadata = () => {
-              videoRef.current?.play();
-              // 开始识别循环
-              const detect = async () => {
-                if (videoRef.current && handsInstance) {
-                  await handsInstance.send({ image: videoRef.current });
-                }
-                if (isMounted) requestRef.current = requestAnimationFrame(detect);
-              };
-              requestRef.current = requestAnimationFrame(detect);
-            };
-          }
-        } catch (e: any) {
-          console.warn("Camera access failed:", e);
-          setCameraError(e.name === 'NotAllowedError' ? "Permission Denied" : "Hardware Error");
-        }
+        stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { width: 640, height: 480, facingMode: 'user' } 
+        });
         
-        if (isMounted) setIsReady(true);
-      } catch (err) {
-        console.error("MediaPipe initialization failed:", err);
+        if (videoRef.current && isMounted) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.onloadedmetadata = () => {
+            if (!isMounted) return;
+            videoRef.current?.play();
+            setIsCameraStarting(false);
+            const detect = async () => {
+              if (videoRef.current && handsInstance && interactionEnabledRef.current) {
+                await handsInstance.send({ image: videoRef.current });
+                if (isMounted) requestRef.current = requestAnimationFrame(detect);
+              }
+            };
+            requestRef.current = requestAnimationFrame(detect);
+          };
+        }
+      } catch (err: any) {
+        console.error("Interaction start failed:", err);
         if (isMounted) {
-          setIsReady(true);
-          setCameraError("Init Failed");
+          setCameraError(err.name === 'NotAllowedError' ? "Permission Denied" : "Hardware Error");
+          setIsCameraStarting(false);
         }
       }
+      if (isMounted) setIsReady(true);
     };
 
-    initMediaPipe();
+    const stopInteraction = () => {
+      if (requestRef.current) cancelAnimationFrame(requestRef.current);
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        stream = null;
+      }
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
+      if (handsInstance) {
+        handsInstance.close();
+        handsInstance = null;
+      }
+      setHandPos({ x: 0, y: 0, active: false, isFist: false });
+    };
+
+    if (interactionEnabled) {
+      startInteraction();
+    } else {
+      stopInteraction();
+      setIsReady(true);
+    }
 
     return () => {
       isMounted = false;
-      if (requestRef.current) cancelAnimationFrame(requestRef.current);
-      if (stream) stream.getTracks().forEach(track => track.stop());
-      if (handsInstance) handsInstance.close();
+      stopInteraction();
     };
-  }, []);
+  }, [interactionEnabled]);
 
   return (
     <div className="relative w-full h-screen bg-[#011612]">
@@ -164,15 +187,25 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {uiVisible && (
-        <div className={`absolute top-6 left-6 z-50 overflow-hidden rounded-xl border-2 transition-all duration-500 shadow-2xl ${handPos.active ? (handPos.isFist ? 'border-red-500 scale-110' : 'border-amber-400 scale-110') : 'border-white/20 opacity-40'}`}>
-          <video ref={videoRef} id="video-preview" playsInline muted className="w-32 h-24 object-cover bg-black" />
+      {/* 摄像头预览：逻辑已升级 */}
+      <div className={`absolute top-6 left-6 z-50 overflow-hidden rounded-xl border-2 transition-all duration-700 shadow-2xl pointer-events-none
+        ${uiVisible && interactionEnabled ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-90 -translate-y-4'}
+        ${handPos.active ? (handPos.isFist ? 'border-red-500' : 'border-amber-400') : 'border-white/20'}`}>
+        
+        <div className="w-32 h-24 bg-black relative flex items-center justify-center">
+          {isCameraStarting ? (
+            <div className="w-6 h-6 border-2 border-amber-500/20 border-t-amber-500 rounded-full animate-spin" />
+          ) : !interactionEnabled ? (
+            <div className="text-[10px] text-white/30 font-bold uppercase tracking-widest">Offline</div>
+          ) : null}
+          <video ref={videoRef} id="video-preview" playsInline muted className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ${isCameraStarting ? 'opacity-0' : 'opacity-100'}`} />
           <div className={`absolute inset-0 transition-colors duration-300 ${handPos.active && handPos.isFist ? 'bg-red-500/20' : 'bg-transparent'}`} />
-          <div className="absolute bottom-1 left-1 px-1 bg-black/50 rounded text-[8px] text-white font-bold uppercase tracking-tighter">
-            {cameraError ? cameraError : !interactionEnabled ? 'GESTURE DISABLED' : handPos.active ? (handPos.isFist ? 'FIST - SUMMON' : 'OPEN - RELEASE') : 'Waiting for Hand'}
-          </div>
         </div>
-      )}
+        
+        <div className="absolute bottom-1 left-1 px-1 bg-black/50 rounded text-[8px] text-white font-bold uppercase tracking-tighter">
+          {cameraError ? cameraError : !interactionEnabled ? 'GESTURE OFF' : isCameraStarting ? 'WAKING UP...' : handPos.active ? (handPos.isFist ? 'FIST - SUMMON' : 'OPEN - RELEASE') : 'Waiting for Hand'}
+        </div>
+      </div>
 
       <Canvas shadows dpr={[1, 2]}>
         <PerspectiveCamera makeDefault position={[0, 4, 24]} fov={40} />
@@ -186,7 +219,7 @@ const App: React.FC = () => {
           <pointLight position={[-10, -5, -10]} intensity={1.5} color="#ffd700" />
           <Scene treeState={treeState} handPos={handPos} />
           <ContactShadows position={[0, -7, 0]} opacity={0.6} scale={50} blur={3} far={15} />
-          <EffectComposer disableNormalPass>
+          <EffectComposer enableNormalPass={false}>
             <Bloom luminanceThreshold={0.8} mipmapBlur intensity={1.6} radius={0.5} />
             <Noise opacity={0.03} />
             <Vignette eskil={false} offset={0.05} darkness={1.3} />
