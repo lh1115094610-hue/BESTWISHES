@@ -1,0 +1,7 @@
+{
+  "name": "Interactive Christmas Tree",
+  "description": "A high-fidelity 3D interactive Christmas tree with physics-based gesture control, magical gold dust, and cinematic post-processing.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

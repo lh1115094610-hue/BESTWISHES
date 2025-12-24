@@ -1,0 +1,17 @@
+
+export const COLORS = {
+  EMERALD: '#004d40',
+  EMERALD_DARK: '#011612',
+  GOLD: '#ffd700',
+  GOLD_BRIGHT: '#fff176',
+  LUXURY_RED: '#b71c1c',
+};
+
+export const CONFIG = {
+  FOLIAGE_COUNT: 12000,
+  ORNAMENT_COUNT: 250,
+  GOLD_DUST_COUNT: 800,
+  CHAOS_RADIUS: 15,
+  TREE_HEIGHT: 12,
+  TREE_RADIUS: 5,
+};
